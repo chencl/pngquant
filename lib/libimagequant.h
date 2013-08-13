@@ -21,6 +21,9 @@ extern "C" {
 #endif
 
 #include <stddef.h>
+#include <stdlib.h>
+#include <malloc.h>
+#define restrict __restrict
 
 typedef struct liq_attr liq_attr;
 typedef struct liq_image liq_image;

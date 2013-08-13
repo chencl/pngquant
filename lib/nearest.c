@@ -67,7 +67,8 @@ static int compareradius(const void *ap, const void *bp)
 
 static struct head build_head(f_pixel px, const colormap *map, unsigned int num_candidates, mempool *m, float error_margin, bool skip_index[], unsigned int *skipped)
 {
-    struct sorttmp colors[map->colors];
+    // struct sorttmp colors[map->colors];
+	struct sorttmp *colors = (struct sorttmp *)malloc(map->colors);
     unsigned int colorsused=0;
 
     for(unsigned int i=0; i < map->colors; i++) {
@@ -82,11 +83,10 @@ static struct head build_head(f_pixel px, const colormap *map, unsigned int num_
 
     num_candidates = MIN(colorsused, num_candidates);
 
-    struct head h = {
-        .candidates = mempool_alloc(m, num_candidates * sizeof(h.candidates[0]), 0),
-        .vantage_point = px,
-        .num_candidates = num_candidates,
-    };
+    struct head h;
+    h.candidates = (struct color_entry *)mempool_alloc(m, num_candidates * sizeof(h.candidates[0]), 0);
+    h.vantage_point = px;
+    h.num_candidates = num_candidates;
     for(unsigned int i=0; i < num_candidates; i++) {
         h.candidates[i] = (struct color_entry) {
             .color = map->palette[colors[i].index].acolor,
@@ -130,7 +130,7 @@ LIQ_PRIVATE struct nearest_map *nearest_init(const colormap *map, bool fast)
 
     const unsigned long mempool_size = sizeof(struct color_entry) * subset_palette->colors * map->colors/5 + (1<<14);
     mempool m = NULL;
-    struct nearest_map *centroids = mempool_create(&m, sizeof(*centroids), mempool_size, malloc, free);
+    struct nearest_map *centroids = (struct nearest_map *)mempool_create(&m, sizeof(*centroids), mempool_size, malloc, free);
     centroids->mempool = m;
 
     for(unsigned int i=0; i < map->colors; i++) {
@@ -141,7 +141,9 @@ LIQ_PRIVATE struct nearest_map *nearest_init(const colormap *map, bool fast)
     centroids->map = map;
 
     unsigned int skipped=0;
-    bool skip_index[map->colors]; for(unsigned int j=0; j < map->colors; j++) skip_index[j]=false;
+    bool *skip_index = (bool*)alloca(map->colors);// bool skip_index[map->colors]; 
+	for(unsigned int j=0; j < map->colors; j++) 
+		skip_index[j]=false;
 
 
     const unsigned int num_vantage_points = map->colors > 16 ? MIN(map->colors/4, subset_palette->colors) : 0;
@@ -164,22 +166,22 @@ LIQ_PRIVATE struct nearest_map *nearest_init(const colormap *map, bool fast)
     // since finding proper convex hull is more than a few lines, this
     // is a cheap shot at finding just few key points.
     const f_pixel extrema[] = {
-        {.a=0,0,0,0},
+        {0,0,0,0},
 
-        {.a=.5,0,0,0}, {.a=.5,1,0,0},
-        {.a=.5,0,0,1}, {.a=.5,1,0,1},
-        {.a=.5,0,1,0}, {.a=.5,1,1,0},
-        {.a=.5,0,1,1}, {.a=.5,1,1,1},
+        {.5,0,0,0}, {.5,1,0,0},
+        {.5,0,0,1}, {.5,1,0,1},
+        {.5,0,1,0}, {.5,1,1,0},
+        {.5,0,1,1}, {.5,1,1,1},
 
-        {.a=1,0,0,0}, {.a=1,1,0,0},
-        {.a=1,0,0,1}, {.a=1,1,0,1},
-        {.a=1,0,1,0}, {.a=1,1,1,0},
-        {.a=1,0,1,1}, {.a=1,1,1,1},
+        {1,0,0,0}, {1,1,0,0},
+        {1,0,0,1}, {1,1,0,1},
+        {1,0,1,0}, {1,1,1,0},
+        {1,0,1,1}, {1,1,1,1},
 
-        {.a=1,.5, 0, 0}, {.a=1, 0,.5, 0}, {.a=1, 0, 0, .5},
-        {.a=1,.5, 0, 1}, {.a=1, 0,.5, 1}, {.a=1, 0, 1, .5},
-        {.a=1,.5, 1, 0}, {.a=1, 1,.5, 0}, {.a=1, 1, 0, .5},
-        {.a=1,.5, 1, 1}, {.a=1, 1,.5, 1}, {.a=1, 1, 1, .5},
+        {1,.5, 0, 0}, {1, 0,.5, 0}, {1, 0, 0, .5},
+        {1,.5, 0, 1}, {1, 0,.5, 1}, {1, 0, 1, .5},
+        {1,.5, 1, 0}, {1, 1,.5, 0}, {1, 1, 0, .5},
+        {1,.5, 1, 1}, {1, 1,.5, 1}, {1, 1, 1, .5},
     };
     for(unsigned int i=0; i < sizeof(extrema)/sizeof(extrema[0]); i++) {
         skip_index[find_slow(extrema[i], map)]=0;

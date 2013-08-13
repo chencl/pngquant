@@ -54,12 +54,12 @@ static f_pixel box_variance(const hist_item achv[], const struct box *box)
         varianceb += variance_diff(mean.b - px.b, 1.0/256.0)*weight;
     }
 
-    return (f_pixel){
-        .a = variancea*(4.0/16.0),
-        .r = variancer*(7.0/16.0),
-        .g = varianceg*(9.0/16.0),
-        .b = varianceb*(5.0/16.0),
-    };
+	f_pixel pr;
+	pr.a = variancea*(4.0/16.0);
+	pr.r = variancer*(7.0/16.0);
+	pr.g = varianceg*(9.0/16.0);
+	pr.b = varianceb*(5.0/16.0);
+    return (pr);
 }
 
 static double box_max_error(const hist_item achv[], const struct box *box)
@@ -226,7 +226,8 @@ static f_pixel get_median(const struct box *b, hist_item achv[])
 
     // technically the second color is not guaranteed to be sorted correctly
     // but most of the time it is good enough to be useful
-    return averagepixels(2, &achv[b->ind + median_start], 1.0, (f_pixel){0.5,0.5,0.5,0.5});
+	f_pixel px = {0.5,0.5,0.5,0.5};
+    return averagepixels(2, &achv[b->ind + median_start], 1.0, px);
 }
 
 /*
@@ -310,7 +311,7 @@ static bool total_box_error_below_target(double target_mse, struct box bv[], uns
 LIQ_PRIVATE colormap *mediancut(histogram *hist, const float min_opaque_val, unsigned int newcolors, const double target_mse, const double max_mse)
 {
     hist_item *achv = hist->achv;
-    struct box bv[newcolors];
+    struct box *bv = (struct box *)malloc(newcolors); //struct box bv[newcolors];
 
     /*
      ** Set up the initial box.

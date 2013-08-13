@@ -19,7 +19,7 @@
 #include <math.h>
 #include <assert.h>
 #include <stdlib.h>
-#include <stdbool.h>
+//#include <stdbool.h>
 
 #ifndef MAX
 #  define MAX(a,b)  ((a) > (b)? (a) : (b))
@@ -67,29 +67,29 @@ typedef struct {
 
 static const double internal_gamma = 0.5499;
 
-LIQ_PRIVATE void to_f_set_gamma(float gamma_lut[static 256], const double gamma);
+LIQ_PRIVATE void to_f_set_gamma(float gamma_lut[], const double gamma);
 
 /**
  Converts 8-bit color to internal gamma and premultiplied alpha.
  (premultiplied color space is much better for blending of semitransparent colors)
  */
-inline static f_pixel to_f(const float gamma_lut[static 256], const rgba_pixel px) ALWAYS_INLINE;
-inline static f_pixel to_f(const float gamma_lut[static 256], const rgba_pixel px)
+inline static f_pixel to_f(const float gamma_lut[], const rgba_pixel px) ALWAYS_INLINE;
+inline static f_pixel to_f(const float gamma_lut[], const rgba_pixel px)
 {
     float a = px.a/255.f;
-
-    return (f_pixel) {
-        .a = a,
-        .r = gamma_lut[px.r]*a,
-        .g = gamma_lut[px.g]*a,
-        .b = gamma_lut[px.b]*a,
-    };
+	f_pixel _f;
+	_f.a = a;
+	_f.r = gamma_lut[px.r]*a;
+	_f.g = gamma_lut[px.g]*a;
+	_f.b = gamma_lut[px.b]*a;	
+    return (_f);
 }
 
 inline static rgba_pixel to_rgb(const float gamma, const f_pixel px)
 {
     if (px.a < 1.f/256.f) {
-        return (rgba_pixel){0,0,0,0};
+		rgba_pixel _rp = {0,0,0,0};
+        return _rp;
     }
 
     float r = px.r / px.a,
@@ -106,13 +106,12 @@ inline static rgba_pixel to_rgb(const float gamma, const f_pixel px)
     g *= 256.f;
     b *= 256.f;
     a *= 256.f;
-
-    return (rgba_pixel){
-        .r = r>=255.f ? 255 : r,
-        .g = g>=255.f ? 255 : g,
-        .b = b>=255.f ? 255 : b,
-        .a = a>=255.f ? 255 : a,
-    };
+	rgba_pixel _rp;
+	_rp.r = r>=255.f ? 255 : r;
+	_rp.g = g>=255.f ? 255 : g;
+	_rp.b = b>=255.f ? 255 : b;
+	_rp.a = a>=255.f ? 255 : a;
+    return (_rp);
 }
 
 inline static double colordifference_ch(const double x, const double y, const double alphas) ALWAYS_INLINE;
@@ -243,7 +242,7 @@ struct acolorhist_arr_head {
 };
 
 struct acolorhash_table {
-    struct mempool *mempool;
+    struct _mempool *mempool;
     struct acolorhist_arr_head *buckets;
     unsigned int ignorebits, maxcolors, colors, rows;
     struct acolorhist_arr_item *freestack[512];
