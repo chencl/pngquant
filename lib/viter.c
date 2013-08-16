@@ -48,12 +48,10 @@ LIQ_PRIVATE void viter_finalize(colormap *map, const unsigned int max_threads, c
         }
 
         if (total) {
-            map->palette[i].acolor = (f_pixel){
-                .a = a / total,
-                .r = r / total,
-                .g = g / total,
-                .b = b / total,
-            };
+            map->palette[i].acolor.a = a / total;
+            map->palette[i].acolor.r = r / total;
+            map->palette[i].acolor.g = g / total;
+            map->palette[i].acolor.b = b / total;
         }
         map->palette[i].popularity = total;
     }

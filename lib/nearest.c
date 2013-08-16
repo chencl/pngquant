@@ -88,10 +88,8 @@ static struct head build_head(f_pixel px, const colormap *map, unsigned int num_
     h.vantage_point = px;
     h.num_candidates = num_candidates;
     for(unsigned int i=0; i < num_candidates; i++) {
-        h.candidates[i] = (struct color_entry) {
-            .color = map->palette[colors[i].index].acolor,
-            .index = colors[i].index,
-        };
+        h.candidates[i].color = map->palette[colors[i].index].acolor;
+        h.candidates[i].index = colors[i].index;
     }
     // if all colors within this radius are included in candidates, then there cannot be any other better match
     // farther away from the vantage point than half of the radius. Due to alpha channel must assume pessimistic radius.
@@ -147,7 +145,7 @@ LIQ_PRIVATE struct nearest_map *nearest_init(const colormap *map, bool fast)
 
 
     const unsigned int num_vantage_points = map->colors > 16 ? MIN(map->colors/4, subset_palette->colors) : 0;
-    centroids->heads = mempool_alloc(&centroids->mempool, sizeof(centroids->heads[0])*(num_vantage_points+1), mempool_size); // +1 is fallback head
+    centroids->heads = (struct head *)mempool_alloc(&centroids->mempool, sizeof(centroids->heads[0])*(num_vantage_points+1), mempool_size); // +1 is fallback head
 
     // floats and colordifference calculations are not perfect
     const float error_margin = fast ? 0 : 8.f/256.f/256.f;
