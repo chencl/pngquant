@@ -57,14 +57,15 @@ use --force to overwrite.\n"
 
 #include "rwpng.h"  /* typedefs, common macros, public prototypes */
 #include "lib/libimagequant.h"
-#include "lib/pam.h"
+
 
 struct pngquant_options {
     liq_attr *liq;
     liq_image *fixed_palette_image;
     liq_log_callback_function *log_callback;
     void *log_callback_user_info;
-    bool floyd, using_stdin, force, ie_mode, min_quality_limit, fast_compression;
+    float floyd;
+    bool using_stdin, force, ie_mode, min_quality_limit, fast_compression;
 };
 
 static pngquant_error prepare_output_image(liq_result *result, liq_image *input_image, png8_image *output_image);
@@ -186,10 +187,10 @@ static bool parse_quality(const char *quality, liq_attr *options, bool *min_qual
     return LIQ_OK == liq_set_quality(options, limit, target);
 }
 
-static const struct {const char *old; char *new;} obsolete_options[] = {
-    {"-fs","--floyd"},
+static const struct {const char *old; const char *newopt;} obsolete_options[] = {
+    {"-fs","--floyd=1"},
     {"-nofs", "--ordered"},
-    {"-floyd", "--floyd"},
+    {"-floyd", "--floyd=1"},
     {"-nofloyd", "--ordered"},
     {"-ordered", "--ordered"},
     {"-force", "--force"},
@@ -213,8 +214,8 @@ static void fix_obsolete_options(const unsigned int argc, char *argv[])
 
         for(unsigned int i=0; i < sizeof(obsolete_options)/sizeof(obsolete_options[0]); i++) {
             if (0 == strcmp(obsolete_options[i].old, argv[argn])) {
-                fprintf(stderr, "  warning: option '%s' has been replaced with '%s'.\n", obsolete_options[i].old, obsolete_options[i].new);
-                argv[argn] = obsolete_options[i].new;
+                fprintf(stderr, "  warning: option '%s' has been replaced with '%s'.\n", obsolete_options[i].old, obsolete_options[i].newopt);
+                argv[argn] = (char*)obsolete_options[i].newopt;
             }
         }
     }
@@ -227,12 +228,13 @@ static const struct option long_options[] = {
     {"quiet", no_argument, NULL, 'q'},
     {"force", no_argument, NULL, 'f'},
     {"no-force", no_argument, NULL, arg_no_force},
-    {"floyd", no_argument, NULL, arg_floyd},
+    {"floyd", optional_argument, NULL, arg_floyd},
     {"ordered", no_argument, NULL, arg_ordered},
     {"nofs", no_argument, NULL, arg_ordered},
     {"iebug", no_argument, NULL, arg_iebug},
     {"transbug", no_argument, NULL, arg_transbug},
     {"ext", required_argument, NULL, arg_ext},
+    {"output", required_argument, NULL, 'o'},
     {"speed", required_argument, NULL, 's'},
     {"quality", required_argument, NULL, 'Q'},
     {"map", required_argument, NULL, arg_map},
@@ -241,13 +243,13 @@ static const struct option long_options[] = {
     {NULL, 0, NULL, 0},
 };
 
-int pngquant_file(const char *filename, const char *newext, struct pngquant_options *options);
+pngquant_error pngquant_file(const char *filename, const char *outname, struct pngquant_options *options);
 
 
 int main(int argc, char *argv[])
 {
     struct pngquant_options options = {
-        .floyd = true, // floyd-steinberg dithering
+        .floyd = 1.f, // floyd-steinberg dithering
     };
     options.liq = liq_attr_create();
 
@@ -261,13 +263,13 @@ int main(int argc, char *argv[])
 
     unsigned int error_count=0, skipped_count=0, file_count=0;
     pngquant_error latest_error=SUCCESS;
-    const char *newext = NULL;
+    const char *newext = NULL, *output_file_path = NULL;
 
     fix_obsolete_options(argc, argv);
 
     int opt;
     do {
-        opt = getopt_long(argc, argv, "Vvqfhs:Q:", long_options, NULL);
+        opt = getopt_long(argc, argv, "Vvqfhs:Q:o:", long_options, NULL);
         switch (opt) {
             case 'v':
                 liq_set_log_callback(options.liq, log_callback, NULL);
@@ -277,11 +279,25 @@ int main(int argc, char *argv[])
                 liq_set_log_callback(options.liq, NULL, NULL);
                 options.log_callback = NULL;
                 break;
-            case arg_floyd: options.floyd = true; break;
-            case arg_ordered: options.floyd = false; break;
+
+            case arg_floyd:
+                options.floyd = optarg ? atof(optarg) : 1.0;
+                if (options.floyd < 0 || options.floyd > 1.0) {
+                    fputs("--floyd argument must be in 0..1 range\n", stderr);
+                    return INVALID_ARGUMENT;
+                }
+                break;
+            case arg_ordered: options.floyd = 0; break;
             case 'f': options.force = true; break;
             case arg_no_force: options.force = false; break;
+
             case arg_ext: newext = optarg; break;
+            case 'o':
+                if (output_file_path) {
+                    fputs("--output option can be used only once\n", stderr);
+                    return INVALID_ARGUMENT;
+                }
+                output_file_path = optarg; break;
 
             case arg_iebug:
                 // opacities above 238 will be rounded up to 255, because IE6 truncates <255 to 0.
@@ -300,7 +316,7 @@ int main(int argc, char *argv[])
                         options.fast_compression = true;
                     }
                     if (speed == 11) {
-                        options.floyd = false;
+                        options.floyd = 0;
                         speed = 10;
                     }
                     if (LIQ_OK != liq_set_speed(options.liq, speed)) {
@@ -318,9 +334,12 @@ int main(int argc, char *argv[])
                 break;
 
             case arg_map:
-                if (SUCCESS != read_image(options.liq, optarg, false, &(png24_image){}, &options.fixed_palette_image, false)) {
-                    fprintf(stderr, "  error: Unable to load %s", optarg);
-                    return INVALID_ARGUMENT;
+                {
+                    png24_image tmp = {};
+                    if (SUCCESS != read_image(options.liq, optarg, false, &tmp, &options.fixed_palette_image, false)) {
+                        fprintf(stderr, "  error: Unable to load %s", optarg);
+                        return INVALID_ARGUMENT;
+                    }
                 }
                 break;
 
@@ -362,9 +381,14 @@ int main(int argc, char *argv[])
         argn++;
     }
 
+    if (newext && output_file_path) {
+        fputs("--ext and --output options can't be used at the same time\n", stderr);
+        return INVALID_ARGUMENT;
+    }
+
     // new filename extension depends on options used. Typically basename-fs8.png
     if (newext == NULL) {
-        newext = options.floyd ? "-ie-fs8.png" : "-ie-or8.png";
+        newext = options.floyd > 0 ? "-ie-fs8.png" : "-ie-or8.png";
         if (!options.ie_mode) newext += 3; /* skip "-ie" */
     }
 
@@ -373,7 +397,17 @@ int main(int argc, char *argv[])
         argn = argc-1;
     }
 
+    if (options.using_stdin && output_file_path) {
+        fputs("--output can't be mixed with stdin\n", stderr);
+        return INVALID_ARGUMENT;
+    }
+
     const int num_files = argc-argn;
+
+    if (output_file_path && num_files != 1) {
+        fputs("Only one input file is allowed when --output is used\n", stderr);
+        return INVALID_ARGUMENT;
+    }
 
 #ifdef _OPENMP
     // if there's a lot of files, coarse parallelism can be used
@@ -403,7 +437,26 @@ int main(int argc, char *argv[])
         }
         #endif
 
-        pngquant_error retval = pngquant_file(filename, newext, &opts);
+
+        pngquant_error retval = SUCCESS;
+
+        const char *outname = output_file_path;
+        char *outname_free = NULL;
+        if (!options.using_stdin) {
+            if (!outname) {
+                outname = outname_free = add_filename_extension(filename, newext);
+            }
+            if (!options.force && file_exists(outname)) {
+                fprintf(stderr, "  error:  %s exists; not overwriting\n", outname);
+                retval = NOT_OVERWRITING_ERROR;
+            }
+        }
+
+        if (!retval) {
+            retval = pngquant_file(filename, outname, &opts);
+        }
+
+        free(outname_free);
 
         liq_attr_destroy(opts.liq);
 
@@ -443,31 +496,18 @@ int main(int argc, char *argv[])
 
 static void pngquant_output_image_free(png8_image *output_image)
 {
-    if (output_image->indexed_data) {
-        free(output_image->indexed_data);
-        output_image->indexed_data = NULL;
-    }
+    free(output_image->indexed_data);
+    output_image->indexed_data = NULL;
 
-    if (output_image->row_pointers) {
-        free(output_image->row_pointers);
-        output_image->row_pointers = NULL;
-    }
+    free(output_image->row_pointers);
+    output_image->row_pointers = NULL;
 }
 
-int pngquant_file(const char *filename, const char *newext, struct pngquant_options *options)
+pngquant_error pngquant_file(const char *filename, const char *outname, struct pngquant_options *options)
 {
-    int retval = 0;
+    pngquant_error retval = SUCCESS;
 
     verbose_printf(options, "%s:", filename);
-
-    char *outname = NULL;
-    if (!options->using_stdin) {
-        outname = add_filename_extension(filename,newext);
-        if (!options->force && file_exists(outname)) {
-            fprintf(stderr, "  error:  %s exists; not overwriting\n", outname);
-            retval = NOT_OVERWRITING_ERROR;
-        }
-    }
 
     liq_image *input_image = NULL;
     png24_image input_image_rwpng = {};
@@ -486,7 +526,7 @@ int pngquant_file(const char *filename, const char *newext, struct pngquant_opti
 
         if (remap) {
             liq_set_output_gamma(remap, 0.45455); // fixed gamma ~2.2 for the web. PNG can't store exact 1/2.2
-            liq_set_dithering_level(remap, options->floyd ? 1.0 : 0);
+            liq_set_dithering_level(remap, options->floyd);
 
             retval = prepare_output_image(remap, input_image, &output_image);
             if (!retval) {
@@ -513,20 +553,15 @@ int pngquant_file(const char *filename, const char *newext, struct pngquant_opti
     } else if (TOO_LOW_QUALITY == retval && options->using_stdin) {
         // when outputting to stdout it'd be nasty to create 0-byte file
         // so if quality is too low, output 24-bit original
-        int write_retval = write_image(NULL, &input_image_rwpng, outname, options);
+        pngquant_error write_retval = write_image(NULL, &input_image_rwpng, outname, options);
         if (write_retval) retval = write_retval;
     }
 
     liq_image_destroy(input_image);
     pngquant_output_image_free(&output_image);
 
-    if (input_image_rwpng.row_pointers) {
-        free(input_image_rwpng.row_pointers);
-    }
-    if (input_image_rwpng.rgba_data) {
-        free(input_image_rwpng.rgba_data);
-    }
-    if (outname) free(outname);
+    free(input_image_rwpng.row_pointers);
+    free(input_image_rwpng.rgba_data);
 
     return retval;
 }
@@ -567,6 +602,7 @@ static char *add_filename_extension(const char *filename, const char *newext)
     size_t x = strlen(filename);
 
     char* outname = malloc(x+4+strlen(newext)+1);
+    if (!outname) return NULL;
 
     strncpy(outname, filename, x);
     if (strncmp(outname+x-4, ".png", 4) == 0 || strncmp(outname+x-4, ".PNG", 4) == 0)
