@@ -318,7 +318,8 @@ LIQ_PRIVATE colormap *mediancut(histogram *hist, const float min_opaque_val, uns
      */
     bv[0].ind = 0;
     bv[0].colors = hist->size;
-    bv[0].color = averagepixels(bv[0].colors, &achv[bv[0].ind], min_opaque_val, (f_pixel){0.5,0.5,0.5,0.5});
+	f_pixel _fpx= {0.5,0.5,0.5,0.5};
+    bv[0].color = averagepixels(bv[0].colors, &achv[bv[0].ind], min_opaque_val, _fpx);
     bv[0].variance = box_variance(achv, &bv[0]);
     bv[0].max_error = box_max_error(achv, &bv[0]);
     bv[0].sum = 0;
@@ -500,6 +501,6 @@ static f_pixel averagepixels(unsigned int clrs, const hist_item achv[], const fl
     }
 
     assert(!isnan(r) && !isnan(g) && !isnan(b) && !isnan(a));
-
-    return (f_pixel){.r=r, .g=g, .b=b, .a=a};
+	f_pixel _fpx = {r, g, b, a};
+    return _fpx;
 }

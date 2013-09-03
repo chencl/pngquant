@@ -184,8 +184,8 @@ LIQ_PRIVATE struct nearest_map *nearest_init(const colormap *map, bool fast)
     for(unsigned int i=0; i < sizeof(extrema)/sizeof(extrema[0]); i++) {
         skip_index[find_slow(extrema[i], map)]=0;
     }
-
-    centroids->heads[h] = build_head((f_pixel){0,0,0,0}, map, map->colors, &centroids->mempool, error_margin, skip_index, &skipped);
+	f_pixel _fpx = {0,0,0,0};
+    centroids->heads[h] = build_head(_fpx, map, map->colors, &centroids->mempool, error_margin, skip_index, &skipped);
     centroids->heads[h].radius = MAX_DIFF;
 
     // get_subset_palette could have created a copy

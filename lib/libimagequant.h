@@ -6,7 +6,7 @@
 #define LIBIMAGEQUANT_H
 
 #ifndef LIQ_EXPORT
-#define LIQ_EXPORT extern
+#define LIQ_EXPORT extern "C" __declspec(dllimport)
 #endif
 #ifndef LIQ_PRIVATE
 #if defined(__GNUC__) || defined (__llvm__)
