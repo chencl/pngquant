@@ -1,42 +1,44 @@
-#libimagequant—Image Quantization Library
+# libimagequant—Image Quantization Library
 
 Small, portable C library for high-quality conversion of RGBA images to 8-bit indexed-color (palette) images.
 It's powering [pngquant2](http://pngquant.org).
 
-##License
+## License
 
 [BSD-like](https://raw.github.com/pornel/improved-pngquant/master/lib/COPYRIGHT).
 It can be linked with both free and closed-source software.
 
-##Download
+## Download
 
-The library is currently a part of the [pngquant2 project](https://github.com/pornel/improved-pngquant/tree/lib/lib).
+The [library](http://pngquant.org/lib) is currently a part of the [pngquant2 project](https://github.com/pornel/improved-pngquant/tree/lib/lib).
 
-Files needed for the library are only in the `lib/` directory inside the repository.
+Files needed for the library are only in the `lib/` directory inside the repository (and you can ignore the rest).
 
-##Compiling and Linking
+## Compiling and Linking
 
 The library can be linked with ANSI C and C++ programs. It has no external dependencies.
 
-To build it run:
+To build on Unix-like systems run:
 
     make -C lib
 
 it will create `lib/libimagequant.a` which you can link with your program.
 
-    gcc yourprogram.c lib/libimagequant.a
+    gcc yourprogram.c /path/to/lib/libimagequant.a
 
 Alternatively you can compile the library with your program simply by including all `.c` files (and define `NDEBUG` to get fast build):
 
     gcc -std=c99 -O3 -DNDEBUG lib/*.c yourprogram.c
 
-###Compiling on Windows
+### Compiling on Windows/Visual Studio
 
-The library can be compiled with any C compiler that has at least basic support for C99 (GCC, clang, ICC, C++ Builder, even Tiny C Compiler). Unfortunately as of 2013 Visual Studio (MSVC) has not yet been updated to support C newer than the 1989 version.
+The library can be compiled with any C compiler that has at least basic support for C99 (GCC, clang, ICC, C++ Builder, even Tiny C Compiler), but Visual Studio 2012 and older are not up to date with the 1999 C standard. There are 3 options for using `libimagequant` with Visual Studio:
 
-On Windows you can compile the library with GCC from MinGW or Cygwin. Use GCC to build `libimagequant.a` (using instructions above) and add it along with `libgcc.a` (shipped with the compiler) to your VC project.
+ * Use Visual Studio **2013** (MSVC12) or newer.
+ * Or use GCC from [MinGW](http://www.mingw.org). Use GCC to build `libimagequant.a` (using above instructions for Unix) and add it along with `libgcc.a` (shipped with the MinGW compiler) to your VC project.
+ * Or use [C++ version of `libimagequant`](https://github.com/pornel/pngquant/tree/cpp). The C++ version is not as up-to-date as C version, but should be compatible with Visual Studio older than 2013 (VC12).
 
-##Overview
+## Overview
 
 The basic flow is:
 
@@ -63,7 +65,7 @@ The basic flow is:
     liq_image_destroy(image);
     liq_result_destroy(res);
 
-It's safe to pass `NULL` to any function accepting `liq_attr`, `liq_image`, `liq_result`. These objects can be reused multiple times. Functions returning `liq_error` return `LIQ_OK` on success.
+It's safe to pass `NULL` to any function accepting `liq_attr`, `liq_image`, `liq_result`. These objects can be reused multiple times. Functions returning `liq_error` return `LIQ_OK` (`0`) on success and non-zero on error.
 
 There are 3 ways to create image object for quantization:
 
@@ -71,7 +73,7 @@ There are 3 ways to create image object for quantization:
   * `liq_image_create_rgba_rows()` for non-contiguous RGBA bitmaps (that have padding between rows or reverse order, e.g. BMP).
   * `liq_image_create_custom()` for RGB, ABGR, YUV and all other formats that can be converted on-the-fly to RGBA (you have to supply the conversion function).
 
-##Functions
+## Functions
 
 ----
 
@@ -79,7 +81,7 @@ There are 3 ways to create image object for quantization:
 
 Returns object that will hold initial settings (atrributes) for the library. The object should be freed using `liq_attr_destroy()` after it's no longer needed.
 
-Returns `NULL` if the library cannot run on the current machine (e.g. the library has been compiled for SSE2-capable x86 CPU and run on VIA C3 CPU).
+Returns `NULL` in the unlikely case that the library cannot run on the current machine (e.g. the library has been compiled for SSE2-capable x86 CPU and run on VIA C3 CPU).
 
 ----
 
@@ -209,7 +211,7 @@ Releases memory owned by the given object. Object must not be used any more afte
 
 Freeing `liq_result` also frees any `liq_palette` obtained from it.
 
-##Advanced Functions
+## Advanced Functions
 
 ----
 
@@ -399,7 +401,7 @@ Sets gamma correction for generated palette and remapped image. Must be > 0 and 
 Getters for `width`, `height` and `gamma` of the input image.
 
 
-##Multithreading
+## Multithreading
 
 The library is stateless and doesn't use any global or thread-local storage. It doesn't use any locks.
 
@@ -408,7 +410,7 @@ The library is stateless and doesn't use any global or thread-local storage. It 
 
 The library needs to sort unique colors present in the image. Although the sorting algorithm does few things to make stack usage minimal in typical cases, there is no guarantee against extremely degenerate cases, so threads should have automatically growing stack.
 
-###OpenMP
+### OpenMP
 
 The library will parallelize some operations if compiled with OpenMP.
 
@@ -416,7 +418,7 @@ You must not increase number of maximum threads after `liq_image` has been creat
 
 Callback of `liq_image_create_custom()` may be called from different threads at the same time.
 
-##Acknowledgements
+## Acknowledgements
 
 Thanks to Irfan Skiljan for helping test the first version of the library.
 
