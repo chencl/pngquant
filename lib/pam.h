@@ -28,9 +28,9 @@
 
 #define MAX_DIFF 1e20
 
-// it's safe to assume that 64-bit x86 has SSE2.
 #ifndef USE_SSE
-#  if defined(__SSE2__) && (defined(__x86_64__) || defined(__amd64) || defined(WIN32) || defined(__WIN32__))
+   // SSE default on x86_64 and Windows
+#  if defined(__SSE__) && (defined(__x86_64__) || defined(__amd64) || defined(WIN32) || defined(__WIN32__))
 #    define USE_SSE 1
 #  else
 #    define USE_SSE 0
@@ -38,20 +38,30 @@
 #endif
 
 #if USE_SSE
-#include <emmintrin.h>
-#define SSE_ALIGN __attribute__ ((aligned (16)))
-#define cpuid(func,ax,bx,cx,dx)\
+#  include <xmmintrin.h>
+#  ifdef _MSC_VER
+#    include <intrin.h>
+#    define SSE_ALIGN
+#  else
+#    define SSE_ALIGN __attribute__ ((aligned (16)))
+#    define cpuid(func,ax,bx,cx,dx)\
     __asm__ __volatile__ ("cpuid":\
     "=a" (ax), "=b" (bx), "=c" (cx), "=d" (dx) : "a" (func));
+#endif
 #else
-#define SSE_ALIGN
+#  define SSE_ALIGN
 #endif
 
 #if defined(__GNUC__) || defined (__llvm__)
-#define ALWAYS_INLINE __attribute__((always_inline))
+#define ALWAYS_INLINE __attribute__((always_inline)) inline
 #define NEVER_INLINE __attribute__ ((noinline))
+#elif defined(_MSC_VER)
+#define inline __inline
+#define restrict __restrict
+#define ALWAYS_INLINE __forceinline
+#define NEVER_INLINE __declspec(noinline)
 #else
-#define ALWAYS_INLINE
+#define ALWAYS_INLINE inline
 #define NEVER_INLINE
 #endif
 
@@ -73,7 +83,7 @@ LIQ_PRIVATE void to_f_set_gamma(float gamma_lut[], const double gamma);
  Converts 8-bit color to internal gamma and premultiplied alpha.
  (premultiplied color space is much better for blending of semitransparent colors)
  */
-inline static f_pixel to_f(const float gamma_lut[], const rgba_pixel px) ALWAYS_INLINE;
+ALWAYS_INLINE static f_pixel to_f(const float gamma_lut[], const rgba_pixel px);
 inline static f_pixel to_f(const float gamma_lut[], const rgba_pixel px)
 {
     float a = px.a/255.f;
@@ -114,7 +124,7 @@ inline static rgba_pixel to_rgb(const float gamma, const f_pixel px)
     return (_rp);
 }
 
-inline static double colordifference_ch(const double x, const double y, const double alphas) ALWAYS_INLINE;
+ALWAYS_INLINE static double colordifference_ch(const double x, const double y, const double alphas);
 inline static double colordifference_ch(const double x, const double y, const double alphas)
 {
     // maximum of channel blended on white, and blended on black
@@ -123,7 +133,7 @@ inline static double colordifference_ch(const double x, const double y, const do
     return black*black + white*white;
 }
 
-inline static float colordifference_stdc(const f_pixel px, const f_pixel py) ALWAYS_INLINE;
+ALWAYS_INLINE static float colordifference_stdc(const f_pixel px, const f_pixel py);
 inline static float colordifference_stdc(const f_pixel px, const f_pixel py)
 {
     // px_b.rgb = px.rgb + 0*(1-px.a) // blend px on black
@@ -145,7 +155,7 @@ inline static float colordifference_stdc(const f_pixel px, const f_pixel py)
            colordifference_ch(px.b, py.b, alphas);
 }
 
-inline static double min_colordifference_ch(const double x, const double y, const double alphas) ALWAYS_INLINE;
+ALWAYS_INLINE static double min_colordifference_ch(const double x, const double y, const double alphas);
 inline static double min_colordifference_ch(const double x, const double y, const double alphas)
 {
     const double black = x-y, white = black+alphas;
@@ -153,7 +163,7 @@ inline static double min_colordifference_ch(const double x, const double y, cons
 }
 
 /* least possible difference between colors (difference varies depending on background they're blended on) */
-inline static float min_colordifference(const f_pixel px, const f_pixel py) ALWAYS_INLINE;
+ALWAYS_INLINE static float min_colordifference(const f_pixel px, const f_pixel py);
 inline static float min_colordifference(const f_pixel px, const f_pixel py)
 {
     const double alphas = py.a-px.a;
@@ -162,7 +172,7 @@ inline static float min_colordifference(const f_pixel px, const f_pixel py)
            min_colordifference_ch(px.b, py.b, alphas);
 }
 
-inline static float colordifference(f_pixel px, f_pixel py) ALWAYS_INLINE;
+ALWAYS_INLINE static float colordifference(f_pixel px, f_pixel py);
 inline static float colordifference(f_pixel px, f_pixel py)
 {
 #if USE_SSE
@@ -205,8 +215,10 @@ typedef struct {
           perceptual_weight; // number of pixels weighted by importance of different areas of the picture
 
     float color_weight;      // these two change every time histogram subset is sorted
-    unsigned int sort_value;
-    unsigned char likely_colormap_index;
+    union {
+        unsigned int sort_value;
+        unsigned char likely_colormap_index;
+    };
 } hist_item;
 
 typedef struct {
@@ -214,6 +226,7 @@ typedef struct {
     void (*free)(void*);
     double total_perceptual_weight;
     unsigned int size;
+    unsigned int ignorebits;
 } histogram;
 
 typedef struct {
@@ -225,6 +238,8 @@ typedef struct colormap {
     colormap_item *palette;
     struct colormap *subset_palette;
     unsigned int colors;
+    void* (*malloc)(size_t);
+    void (*free)(void*);
 } colormap;
 
 struct acolorhist_arr_item {
@@ -257,7 +272,7 @@ LIQ_PRIVATE bool pam_computeacolorhash(struct acolorhash_table *acht, const rgba
 
 LIQ_PRIVATE void pam_freeacolorhist(histogram *h);
 
-LIQ_PRIVATE colormap *pam_colormap(unsigned int colors);
+LIQ_PRIVATE colormap *pam_colormap(unsigned int colors, void* (*malloc)(size_t), void (*free)(void*));
 LIQ_PRIVATE colormap *pam_duplicate_colormap(colormap *map);
 LIQ_PRIVATE void pam_freecolormap(colormap *c);
 

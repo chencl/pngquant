@@ -18,26 +18,35 @@ CFLAGSOPT ?= -DNDEBUG -O3 -ffast-math -funroll-loops -fomit-frame-pointer
 CFLAGS ?= -Wall -Wno-unknown-pragmas -I. -I/usr/local/include/ -I/usr/include/ $(CFLAGSOPT)
 CFLAGS += -std=c99 $(CFLAGSADD)
 
-LDFLAGS ?= -L/usr/local/lib/ -L/usr/lib/
-
-ifneq "$(wildcard /usr/X11/lib/)" ""
-LDFLAGS += -L/usr/X11/lib/
-CFLAGS += -I/usr/X11/include/
+ifeq ($(CC), icc)
+# disable omp pragmas warning when -fopenmp is not set
+CFLAGS += -fast -wd3180
 endif
 
-ifneq "$(wildcard /opt/local/lib)" ""
-LDFLAGS += -L/opt/local/lib
-CFLAGS += -I/opt/local/include/libpng15
+LDFLAGS ?= -L/usr/local/lib/ -L/usr/lib/
+
+ifneq "$(wildcard $(CUSTOMZLIB))" ""
+LDFLAGS += -L$(CUSTOMZLIB) -L$(CUSTOMZLIB)/lib
+CFLAGS += -I$(CUSTOMZLIB) -I$(CUSTOMZLIB)/include
 endif
 
 ifneq "$(wildcard $(CUSTOMLIBPNG))" ""
 LDFLAGS += -L$(CUSTOMLIBPNG) -L$(CUSTOMLIBPNG)/lib
 CFLAGS += -I$(CUSTOMLIBPNG) -I$(CUSTOMLIBPNG)/include
-endif
 
-ifneq "$(wildcard $(CUSTOMZLIB))" ""
-LDFLAGS += -L$(CUSTOMZLIB) -L$(CUSTOMZLIB)/lib
-CFLAGS += -I$(CUSTOMZLIB) -I$(CUSTOMZLIB)/include
+else ifneq "$(wildcard /usr/local/include/png.h)" ""
+
+else ifneq "$(wildcard /opt/local/include/libpng15)" ""
+LDFLAGS += -L/opt/local/lib
+CFLAGS += -I/opt/local/include/libpng15
+
+else ifneq "$(wildcard /opt/X11/include/libpng15/)" ""
+LDFLAGS += -L/opt/X11/lib
+CFLAGS += -I/opt/X11/include/libpng15/
+
+else ifneq "$(wildcard /usr/X11/lib/)" ""
+LDFLAGS += -L/usr/X11/lib/
+CFLAGS += -I/usr/X11/include/
 endif
 
 LDFLAGS += -lpng -lz -lm lib/libimagequant.a -lm $(LDFLAGSADD)
@@ -57,6 +66,11 @@ OBJS += $(COCOA_OBJS)
 FRAMEWORKS += -framework Cocoa
 endif
 
+ifdef USE_LCMS
+CFLAGS += $(shell pkg-config --cflags lcms2) -DUSE_LCMS=1
+LDFLAGS += $(shell pkg-config --libs lcms2)
+endif
+
 BUILD_CONFIGURATION="$(CC) $(CFLAGS) $(LDFLAGS)"
 
 all: $(BIN)
@@ -65,7 +79,7 @@ lib/libimagequant.a::
 	$(MAKE) -C lib static
 
 openmp::
-	$(MAKE) CFLAGSADD="$(CFLAGSADD) -fopenmp" OPENMPFLAGS="-Bstatic -lgomp" -j8 $(MKFLAGS)
+	$(MAKE) CFLAGSADD="$(CFLAGSADD) -fopenmp" OPENMPFLAGS="-Bstatic -fopenmp" -j8 $(MKFLAGS)
 
 $(BIN): $(OBJS) lib/libimagequant.a
 	$(CC) $(OBJS) $(LDFLAGS) $(OPENMPFLAGS) $(FRAMEWORKS) -o $@

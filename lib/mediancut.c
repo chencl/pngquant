@@ -31,11 +31,11 @@ struct box {
     unsigned int colors;
 };
 
-inline static double variance_diff(double val, const double good_enough) ALWAYS_INLINE;
+ALWAYS_INLINE static double variance_diff(double val, const double good_enough);
 inline static double variance_diff(double val, const double good_enough)
 {
     val *= val;
-    if (val < good_enough*good_enough) return val*0.5;
+    if (val < good_enough*good_enough) return val*0.25;
     return val;
 }
 
@@ -76,7 +76,7 @@ static double box_max_error(const hist_item achv[], const struct box *box)
     return max_error;
 }
 
-inline static double color_weight(f_pixel median, hist_item h) ALWAYS_INLINE;
+ALWAYS_INLINE static double color_weight(f_pixel median, hist_item h);
 
 static inline void hist_item_swap(hist_item *l, hist_item *r)
 {
@@ -87,10 +87,12 @@ static inline void hist_item_swap(hist_item *l, hist_item *r)
     }
 }
 
-inline static unsigned int qsort_pivot(const hist_item *const base, const unsigned int len) ALWAYS_INLINE;
+ALWAYS_INLINE static unsigned int qsort_pivot(const hist_item *const base, const unsigned int len);
 inline static unsigned int qsort_pivot(const hist_item *const base, const unsigned int len)
 {
-    if (len < 32) return len/2;
+    if (len < 32) {
+        return len/2;
+    }
 
     const unsigned int aidx=8, bidx=len/2, cidx=len-1;
     const unsigned int a=base[aidx].sort_value, b=base[bidx].sort_value, c=base[cidx].sort_value;
@@ -98,7 +100,7 @@ inline static unsigned int qsort_pivot(const hist_item *const base, const unsign
                    : ((b > c) ? bidx : ((a < c) ? aidx : cidx ));
 }
 
-inline static unsigned int qsort_partition(hist_item *const base, const unsigned int len) ALWAYS_INLINE;
+ALWAYS_INLINE static unsigned int qsort_partition(hist_item *const base, const unsigned int len);
 inline static unsigned int qsort_partition(hist_item *const base, const unsigned int len)
 {
     unsigned int l = 1, r = len;
@@ -237,7 +239,9 @@ static int best_splittable_box(struct box* bv, unsigned int boxes, const double 
 {
     int bi=-1; double maxsum=0;
     for(unsigned int i=0; i < boxes; i++) {
-        if (bv[i].colors < 2) continue;
+        if (bv[i].colors < 2) {
+            continue;
+        }
 
         // looks only at max variance, because it's only going to split by it
         const double cv = MAX(bv[i].variance.r, MAX(bv[i].variance.g,bv[i].variance.b));
@@ -263,7 +267,7 @@ inline static double color_weight(f_pixel median, hist_item h)
     return sqrt(diff) * (sqrt(1.0+h.adjusted_weight)-1.0);
 }
 
-static colormap *colormap_from_boxes(struct box* bv, unsigned int boxes, hist_item *achv);
+static void set_colormap_from_boxes(colormap *map, struct box* bv, unsigned int boxes, hist_item *achv);
 static void adjust_histogram(hist_item *achv, const colormap *map, const struct box* bv, unsigned int boxes);
 
 double box_error(const struct box *box, const hist_item achv[])
@@ -308,7 +312,7 @@ static bool total_box_error_below_target(double target_mse, struct box bv[], uns
  ** on Paul Heckbert's paper, "Color Image Quantization for Frame Buffer
  ** Display," SIGGRAPH 1982 Proceedings, page 297.
  */
-LIQ_PRIVATE colormap *mediancut(histogram *hist, const float min_opaque_val, unsigned int newcolors, const double target_mse, const double max_mse)
+LIQ_PRIVATE colormap *mediancut(histogram *hist, const float min_opaque_val, unsigned int newcolors, const double target_mse, const double max_mse, void* (*malloc)(size_t), void (*free)(void*))
 {
     hist_item *achv = hist->achv;
     struct box *bv = (struct box *)malloc(newcolors); //struct box bv[newcolors];
@@ -338,7 +342,8 @@ LIQ_PRIVATE colormap *mediancut(histogram *hist, const float min_opaque_val, uns
     while (boxes < newcolors) {
 
         if (boxes == subset_size) {
-            representative_subset = colormap_from_boxes(bv, boxes, achv);
+            representative_subset = pam_colormap(boxes, malloc, free);
+            set_colormap_from_boxes(representative_subset, bv, boxes, achv);
         }
 
         // first splits boxes that exceed quality limit (to have colors for things like odd green pixel),
@@ -399,14 +404,16 @@ LIQ_PRIVATE colormap *mediancut(histogram *hist, const float min_opaque_val, uns
         }
     }
 
-    colormap *map = colormap_from_boxes(bv, boxes, achv);
+    colormap *map = pam_colormap(boxes, malloc, free);
+    set_colormap_from_boxes(map, bv, boxes, achv);
+
     map->subset_palette = representative_subset;
     adjust_histogram(achv, map, bv, boxes);
 
     return map;
 }
 
-static colormap *colormap_from_boxes(struct box* bv, unsigned int boxes, hist_item *achv)
+static void set_colormap_from_boxes(colormap *map, struct box* bv, unsigned int boxes, hist_item *achv)
 {
     /*
      ** Ok, we've got enough boxes.  Now choose a representative color for
@@ -416,19 +423,15 @@ static colormap *colormap_from_boxes(struct box* bv, unsigned int boxes, hist_it
      ** the box - this is the method specified in Heckbert's paper.
      */
 
-    colormap *map = pam_colormap(boxes);
-
     for(unsigned int bi = 0; bi < boxes; ++bi) {
         map->palette[bi].acolor = bv[bi].color;
 
         /* store total color popularity (perceptual_weight is approximation of it) */
         map->palette[bi].popularity = 0;
         for(unsigned int i=bv[bi].ind; i < bv[bi].ind+bv[bi].colors; i++) {
-            map->palette[bi].popularity += achv[i].perceptual_weight;
+            map->palette[bi].popularity = achv[i].perceptual_weight;
         }
     }
-
-    return map;
 }
 
 /* increase histogram popularity by difference from the final color (this is used as part of feedback loop) */

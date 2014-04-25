@@ -5,7 +5,7 @@ It's powering [pngquant2](http://pngquant.org).
 
 ## License
 
-[BSD-like](https://raw.github.com/pornel/improved-pngquant/master/lib/COPYRIGHT).
+[BSD](https://raw.github.com/pornel/improved-pngquant/master/lib/COPYRIGHT).
 It can be linked with both free and closed-source software.
 
 ## Download
@@ -26,17 +26,18 @@ it will create `lib/libimagequant.a` which you can link with your program.
 
     gcc yourprogram.c /path/to/lib/libimagequant.a
 
-Alternatively you can compile the library with your program simply by including all `.c` files (and define `NDEBUG` to get fast build):
+On BSD, use `gmake` (GNU make) rather than the native `make`.
+
+Alternatively you can compile the library with your program simply by including all `.c` files (and define `NDEBUG` to get a fast version):
 
     gcc -std=c99 -O3 -DNDEBUG lib/*.c yourprogram.c
 
 ### Compiling on Windows/Visual Studio
 
-The library can be compiled with any C compiler that has at least basic support for C99 (GCC, clang, ICC, C++ Builder, even Tiny C Compiler), but Visual Studio 2012 and older are not up to date with the 1999 C standard. There are 3 options for using `libimagequant` with Visual Studio:
+The library can be compiled with any C compiler that has at least basic support for C99 (GCC, clang, ICC, C++ Builder, even Tiny C Compiler), but Visual Studio 2012 and older are not up to date with the 1999 C standard. There are 2 options for using `libimagequant` on Windows:
 
- * Use Visual Studio **2013** (MSVC12) or newer.
- * Or use GCC from [MinGW](http://www.mingw.org). Use GCC to build `libimagequant.a` (using above instructions for Unix) and add it along with `libgcc.a` (shipped with the MinGW compiler) to your VC project.
- * Or use [C++ version of `libimagequant`](https://github.com/pornel/pngquant/tree/cpp). The C++ version is not as up-to-date as C version, but should be compatible with Visual Studio older than 2013 (VC12).
+ * Use Visual Studio **2013** (MSVC 18) and an [MSVC-compatible branch of the library](https://github.com/pornel/pngquant/tree/msvc/lib)
+ * Or use GCC from [MinGW](http://www.mingw.org). Use GCC to build `libimagequant.a` (using the instructions above for Unix) and add it along with `libgcc.a` (shipped with the MinGW compiler) to your VC project.
 
 ## Overview
 
@@ -65,7 +66,9 @@ The basic flow is:
     liq_image_destroy(image);
     liq_result_destroy(res);
 
-It's safe to pass `NULL` to any function accepting `liq_attr`, `liq_image`, `liq_result`. These objects can be reused multiple times. Functions returning `liq_error` return `LIQ_OK` (`0`) on success and non-zero on error.
+Functions returning `liq_error` return `LIQ_OK` (`0`) on success and non-zero on error.
+
+It's safe to pass `NULL` to any function accepting `liq_attr`, `liq_image`, `liq_result` (in that case the error code `LIQ_INVALID_POINTER` will be returned). These objects can be reused multiple times.
 
 There are 3 ways to create image object for quantization:
 
@@ -79,17 +82,23 @@ There are 3 ways to create image object for quantization:
 
     liq_attr* liq_attr_create(void);
 
-Returns object that will hold initial settings (atrributes) for the library. The object should be freed using `liq_attr_destroy()` after it's no longer needed.
+Returns object that will hold initial settings (attributes) for the library. The object should be freed using `liq_attr_destroy()` after it's no longer needed.
 
-Returns `NULL` in the unlikely case that the library cannot run on the current machine (e.g. the library has been compiled for SSE2-capable x86 CPU and run on VIA C3 CPU).
+Returns `NULL` in the unlikely case that the library cannot run on the current machine (e.g. the library has been compiled for SSE-capable x86 CPU and run on VIA C3 CPU).
 
 ----
 
     liq_error liq_set_max_colors(liq_attr* attr, int colors);
 
-Specifies maximum number of colors to use. The default is 256. Instead of setting fixed limit it's better to use `liq_set_quality()` instead.
+Specifies maximum number of colors to use. The default is 256. Instead of setting a fixed limit it's better to use `liq_set_quality()`.
 
-Returns `LIQ_VALUE_OUT_OF_RANGE` if number of colors is outside the 2-256 range.
+Returns `LIQ_VALUE_OUT_OF_RANGE` if number of colors is outside the range 2-256.
+
+----
+
+    int liq_get_max_colors(liq_attr* attr);
+
+Returns the value set by `liq_set_max_colors()`.
 
 ----
 
@@ -97,18 +106,31 @@ Returns `LIQ_VALUE_OUT_OF_RANGE` if number of colors is outside the 2-256 range.
 
 Quality is in range `0` (worst) to `100` (best) and values are analoguous to JPEG quality (i.e. `80` is usually good enough).
 
-Quantization will attempt use lowest number of colors needed to achieve `maximum` quality. `maximum` value of `100` is the default and means conversion as good as possible.
+Quantization will attempt to use the lowest number of colors needed to achieve `maximum` quality. `maximum` value of `100` is the default and means conversion as good as possible.
 
 If it's not possible to convert the image with at least `minimum` quality (i.e. 256 colors is not enough to meet the minimum quality), then `liq_quantize_image()` will fail. The default minumum is `0` (proceeds regardless of quality).
 
-Quality measures how well generated palette fits image given to `liq_quantize_image()`. If a different image is remapped with `liq_write_remapped_image()` then actual quality may be different.
+Quality measures how well the generated palette fits image given to `liq_quantize_image()`. If a different image is remapped with `liq_write_remapped_image()` then actual quality may be different.
 
 Regardless of the quality settings the number of colors won't exceed the maximum (see `liq_set_max_colors()`).
 
 Returns `LIQ_VALUE_OUT_OF_RANGE` if target is lower than minimum or any of them is outside the 0-100 range.
+Returns `LIQ_INVALID_POINTER` if `attr` appears to be invalid.
 
     liq_attr *attr = liq_attr_create();
     liq_set_quality(attr, 50, 80); // use quality 80 if possible. Give up if quality drops below 50.
+
+----
+
+    int liq_get_min_quality(liq_attr* attr);
+
+Returns the lower bound set by `liq_set_quality()`.
+
+----
+
+    int liq_get_max_quality(liq_attr* attr);
+
+Returns the upper bound set by `liq_set_quality()`.
 
 ----
 
@@ -166,13 +188,13 @@ Enables/disables dithering in `liq_write_remapped_image()`. Dithering level must
 
 Precision of the dithering algorithm depends on the speed setting, see `liq_set_speed()`.
 
-Returns `LIQ_VALUE_OUT_OF_RANGE` if dithering level is outside the 0-1 range.
+Returns `LIQ_VALUE_OUT_OF_RANGE` if the dithering level is outside the 0-1 range.
 
 ----
 
     liq_error liq_write_remapped_image(liq_result *result, liq_image *input_image, void *buffer, size_t buffer_size);
 
-Remaps the image to palette and writes it to the given buffer, 1 pixel per byte. Buffer must be large enough to fit entire image (at least width×height bytes). For safety, pass size of the buffer as `buffer_size`.
+Remaps the image to palette and writes its pixels to the given buffer, 1 pixel per byte. Buffer must be large enough to fit the entire image, i.e. width×height bytes large. For safety, pass size of the buffer as `buffer_size`.
 
 For best performance call `liq_get_palette()` *after* this function, as palette is improved during remapping.
 
@@ -232,6 +254,12 @@ Returns `LIQ_VALUE_OUT_OF_RANGE` if the speed is outside the 1-10 range.
 
 ----
 
+    int liq_get_speed(liq_attr* attr);
+
+Returns the value set by `liq_set_speed()`.
+
+----
+
     liq_error liq_set_min_opacity(liq_attr* attr, int min);
 
 Alpha values higher than this will be rounded to opaque. This is a workaround for Internet Explorer 6 that truncates semitransparent values to completely transparent. The default is `255` (no change). 238 is a suggested value.
@@ -240,11 +268,23 @@ Returns `LIQ_VALUE_OUT_OF_RANGE` if the value is outside the 0-255 range.
 
 ----
 
+    int liq_get_min_opacity(liq_attr* attr);
+
+Returns the value set by `liq_set_min_opacity()`.
+
+----
+
     liq_set_min_posterization(liq_attr* attr, int bits);
 
 Ignores given number of least significant bits in all channels, posterizing image to `2^bits` levels. `0` gives full quality. Use `2` for VGA or 16-bit RGB565 displays, `4` if image is going to be output on a RGB444/RGBA4444 display (e.g. low-quality textures on Android).
 
 Returns `LIQ_VALUE_OUT_OF_RANGE` if the value is outside the 0-4 range.
+
+----
+
+    int liq_get_min_posterization(liq_attr* attr);
+
+Returns the value set by `liq_set_min_posterization()`.
 
 ----
 
@@ -400,6 +440,7 @@ Sets gamma correction for generated palette and remapped image. Must be > 0 and 
 
 Getters for `width`, `height` and `gamma` of the input image.
 
+If the input is invalid, these all return -1.
 
 ## Multithreading
 
