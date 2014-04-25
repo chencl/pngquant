@@ -393,7 +393,7 @@ LIQ_EXPORT liq_attr* liq_attr_copy(liq_attr *orig)
 
 static void *liq_aligned_malloc(size_t size)
 {
-    unsigned char *ptr = malloc(size + 16);
+	unsigned char *ptr = (unsigned char *)malloc(size + 16);
     if (!ptr) {
         return NULL;
     }
@@ -407,7 +407,7 @@ static void *liq_aligned_malloc(size_t size)
 
 static void liq_aligned_free(void *inptr)
 {
-    unsigned char *ptr = inptr;
+	unsigned char *ptr = (unsigned char *)inptr;
     size_t offset = ptr[-1] ^ 0x59;
     assert(offset > 0 && offset <= 16);
     free(ptr - offset);
@@ -471,7 +471,7 @@ static liq_image *liq_image_create_internal(liq_attr *attr, rgba_pixel* rows[], 
         return NULL;
     }
 
-    liq_image *img = attr->malloc(sizeof(liq_image));
+	liq_image *img = (liq_image *)attr->malloc(sizeof(liq_image));
     if (!img) return NULL;
     (*img).magic_header = liq_image_magic,
     (*img).malloc = attr->malloc;
@@ -1533,17 +1533,14 @@ static liq_result *pngquant_quantize(histogram *hist, const liq_attr *options, c
 
     liq_result *result = (liq_result *)options->malloc(sizeof(liq_result));
     if (!result) return NULL;
-    *result = (liq_result){
-        .magic_header = liq_result_magic,
-        .malloc = options->malloc,
-        .free = options->free,
-        .palette = acolormap,
-        .palette_error = palette_error,
-        .fast_palette = fast_palette,
-        .use_dither_map = options->use_dither_map,
-        .gamma = gamma,
-        .min_posterization_output = options->min_posterization_output,
-    };
+	result->magic_header = liq_result_magic;
+	result->malloc = options->malloc;
+	result->free = options->free;
+	result->palette_error = palette_error;
+	result->fast_palette = fast_palette;
+	result->use_dither_map = options->use_dither_map;
+	result->gamma = gamma;
+	result->min_posterization_output = options->min_posterization_output;
     return result;
 }
 

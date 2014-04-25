@@ -180,15 +180,13 @@ LIQ_PRIVATE struct acolorhash_table *pam_allocacolorhash(unsigned int maxcolors,
 
 LIQ_PRIVATE histogram *pam_acolorhashtoacolorhist(const struct acolorhash_table *acht, const double gamma, void* (*malloc)(size_t), void (*free)(void*))
 {
-    histogram *hist = (histogram *)malloc(sizeof(hist[0]));
-    if (!hist || !acht) return NULL;
-    *hist = (histogram){
-        .achv = malloc(acht->colors * sizeof(hist->achv[0])),
-        .size = acht->colors,
-        .free = free,
-        .ignorebits = acht->ignorebits,
-    };
-    if (!hist->achv) return NULL;
+	histogram *hist = (histogram *)malloc(sizeof(hist[0]));
+	if (!hist || !acht) return NULL;
+	hist->achv = (hist_item *)malloc(acht->colors * sizeof(hist->achv[0]));
+	hist->size = acht->colors;
+	hist->free = free;
+	hist->ignorebits = acht->ignorebits;
+	if (!hist->achv) return NULL;
 
     float gamma_lut[256];
     to_f_set_gamma(gamma_lut, gamma);
@@ -228,14 +226,12 @@ LIQ_PRIVATE void pam_freeacolorhist(histogram *hist)
 LIQ_PRIVATE colormap *pam_colormap(unsigned int colors, void* (*malloc)(size_t), void (*free)(void*))
 {
     colormap *map = (colormap *)malloc(sizeof(colormap));
-    if (!map) return NULL;
-    *map = (colormap){
-        .malloc = malloc,
-        .free = free,
-        .palette = malloc(colors * sizeof(map->palette[0])),
-        .subset_palette = NULL,
-        .colors = colors,
-    };
+	if (!map) return NULL;
+	map->malloc = malloc;
+	map->free = free;
+	map->palette = (colormap_item *)malloc(colors * sizeof(map->palette[0]));
+	map->subset_palette = NULL;
+	map->colors = colors;
     if (!map->palette) {
         free(map); return NULL;
     }
